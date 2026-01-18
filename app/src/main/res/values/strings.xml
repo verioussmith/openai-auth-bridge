@@ -7,5 +7,5 @@
     <string name="server_stopped">Server Stopped</string>
     <string name="vps_url_hint">Enter VPS URL (e.g., https://your-vps.com)</string>
     <string name="save">Save</string>
-    <string name="status_idle">Tap Start to run the auth bridge</string>
+    <string name="status_idle">Tap Start to run the OAuth bridge server</string>
 </resources>

@@ -2003,6 +2003,7 @@ id enterAlwaysCollapsed
 id exitUntilCollapsed
 id expand_activities_button
 id expanded_menu
+id extractButton
 id fade
 id fill
 id fill_horizontal

@@ -9,7 +9,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="OpenAI Auth Bridge"
+        android:text="OpenAI Session Extractor"
         android:textSize="20sp"
         android:textStyle="bold" />
 
@@ -22,15 +22,24 @@
         android:focusable="true"
         android:gravity="center"
         android:padding="16dp"
-        android:text="Tap to configure"
+        android:text="Tap to open ChatGPT login"
         android:textColor="#2196F3"
-        android:textSize="14sp" />
+        android:textSize="16sp" />
+
+    <Button
+        android:id="@+id/extractButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:onClick="extractSession"
+        android:text="Extract Session Token" />
 
     <WebView
         android:id="@+id/webView"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
+        android:layout_marginTop="16dp"
         android:visibility="gone" />
 
 </LinearLayout>

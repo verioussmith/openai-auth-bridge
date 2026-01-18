@@ -41,7 +41,8 @@ class MainActivity : AppCompatActivity() {
     private val CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
     private val AUTHORIZE_URL = "https://auth.openai.com/oauth/authorize"
     private val TOKEN_URL = "https://auth.openai.com/oauth/token"
-    private val REDIRECT_URI = "http://localhost:1455/auth/callback"
+    private var currentPort = 1455
+    private var serverPort = 1455
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -114,9 +115,13 @@ class MainActivity : AppCompatActivity() {
             codeVerifier = verifier
             authState = generateState()
 
-            startLocalServer()
+            val port = startLocalServer()
+            if (port == null) {
+                return
+            }
+            currentPort = port
 
-            val oauthUrl = buildOAuthUrl(challenge, authState!!)
+            val oauthUrl = buildOAuthUrl(challenge, authState!!, port)
 
             statusText.text = "Opening ChatGPT login..."
             webView.loadUrl(oauthUrl)
@@ -125,78 +130,98 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun startLocalServer() {
+    private fun startLocalServer(): Int? {
         isRunning.set(true)
+        var usedPort: Int? = null
 
         serverThread = Thread {
-            try {
-                serverSocket = ServerSocket(1455, 0, InetAddress.getByName("localhost"))
+            var attempts = 0
+            val maxAttempts = 5
+            var port = 1455
 
-                val responseHtml = """
-                    HTTP/1.1 200 OK
-                    Content-Type: text/html; charset=utf-8
-                    Connection: close
+            while (isRunning.get() && attempts < maxAttempts) {
+                try {
+                    serverSocket = ServerSocket(port, 0, InetAddress.getByName("localhost"))
+                    usedPort = port
+                    android.util.Log.d("OAuth", "Server started on port $port")
 
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <meta charset="UTF-8">
-                        <meta name="viewport" content="width=device-width, initial-scale=1">
-                        <title>Authorization Complete</title>
-                    </head>
-                    <body style="font-family: system-ui, sans-serif; text-align: center; padding: 40px; background: #f5f5f5;">
-                        <div style="max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px;">
-                            <h1 style="color: #10a37f;">Authorization Complete</h1>
-                            <p>You can close this page.</p>
-                        </div>
-                    </body>
-                    </html>
-                """.trimIndent()
+                    val responseHtml = """
+                        HTTP/1.1 200 OK
+                        Content-Type: text/html; charset=utf-8
+                        Connection: close
 
-                while (isRunning.get()) {
-                    try {
-                        val client = serverSocket?.accept() ?: break
-                        val reader = BufferedReader(InputStreamReader(client.getInputStream()))
-                        val request = reader.readText()
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <meta charset="UTF-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1">
+                            <title>Authorization Complete</title>
+                        </head>
+                        <body style="font-family: system-ui, sans-serif; text-align: center; padding: 40px; background: #f5f5f5;">
+                            <div style="max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px;">
+                                <h1 style="color: #10a37f;">Authorization Complete</h1>
+                                <p>You can close this page.</p>
+                            </div>
+                        </body>
+                        </html>
+                    """.trimIndent()
 
-                        if (request.contains("code=") && authCode == null) {
-                            val codeMatch = Regex("code=([^&\\s]+)").find(request)
-                            val stateMatch = Regex("state=([^&\\s]+)").find(request)
+                    while (isRunning.get()) {
+                        try {
+                            val client = serverSocket?.accept() ?: break
+                            val reader = BufferedReader(InputStreamReader(client.getInputStream()))
+                            val request = reader.readText()
 
-                            authCode = codeMatch?.groupValues?.get(1)
-                            authState = stateMatch?.groupValues?.get(1)
+                            if (request.contains("code=") && authCode == null) {
+                                val codeMatch = Regex("code=([^&\\s]+)").find(request)
+                                val stateMatch = Regex("state=([^&\\s]+)").find(request)
 
-                            runOnUiThread {
-                                statusText.text = "Code received!\n\nExchanging for tokens..."
+                                authCode = codeMatch?.groupValues?.get(1)
+                                authState = stateMatch?.groupValues?.get(1)
+
+                                runOnUiThread {
+                                    statusText.text = "Code received!\n\nExchanging for tokens..."
+                                }
+
+                                exchangeCodeForTokens()
                             }
 
-                            exchangeCodeForTokens()
+                            val output: OutputStream = client.getOutputStream()
+                            output.write(responseHtml.toByteArray())
+                            output.flush()
+                            client.close()
+                        } catch (e: Exception) {
+                            if (isRunning.get()) {}
                         }
-
-                        val output: OutputStream = client.getOutputStream()
-                        output.write(responseHtml.toByteArray())
-                        output.flush()
-                        client.close()
-                    } catch (e: Exception) {
-                        if (isRunning.get()) {}
                     }
-                }
-            } catch (e: Exception) {
-                runOnUiThread {
-                    statusText.text = "Server error: ${e.message}\n\nTry closing other apps using port 1455"
+                    break
+                } catch (e: Exception) {
+                    attempts++
+                    port = 1455 + attempts
+                    android.util.Log.d("OAuth", "Port $port failed, trying $port...")
+                    if (attempts >= maxAttempts) {
+                        runOnUiThread {
+                            statusText.text = "Error: All ports in use (1455-1459)\n\nClose other apps and try again"
+                        }
+                    }
                 }
             }
         }
         serverThread?.start()
+
+        // Wait briefly for server to start
+        Thread.sleep(500)
+        return usedPort
     }
 
     private fun exchangeCodeForTokens() {
         val code = authCode ?: return
         val verifier = codeVerifier ?: return
+        val redirectUri = "http://localhost:$currentPort/auth/callback"
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val body = "grant_type=authorization_code&client_id=$CLIENT_ID&code=$code&code_verifier=$verifier&redirect_uri=${java.net.URLEncoder.encode(REDIRECT_URI, "UTF-8")}"
+                val body = "grant_type=authorization_code&client_id=$CLIENT_ID&code=$code&code_verifier=$verifier&redirect_uri=${java.net.URLEncoder.encode(redirectUri, "UTF-8")}"
 
                 val url = URL(TOKEN_URL)
                 val conn = url.openConnection() as HttpURLConnection
@@ -377,12 +402,13 @@ class MainActivity : AppCompatActivity() {
         return (1..32).map { chars[random.nextInt(chars.length)] }.joinToString("")
     }
 
-    private fun buildOAuthUrl(codeChallenge: String, state: String): String {
+    private fun buildOAuthUrl(codeChallenge: String, state: String, port: Int = 1455): String {
+        val redirectUri = "http://localhost:$port/auth/callback"
         return buildString {
             append(AUTHORIZE_URL)
             append("?response_type=code")
             append("&client_id=$CLIENT_ID")
-            append("&redirect_uri=${java.net.URLEncoder.encode(REDIRECT_URI, "UTF-8")}")
+            append("&redirect_uri=${java.net.URLEncoder.encode(redirectUri, "UTF-8")}")
             append("&scope=openid+profile+email+offline_access")
             append("&code_challenge=$codeChallenge")
             append("&code_challenge_method=S256")

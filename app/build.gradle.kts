@@ -19,7 +19,7 @@ android {
         create("release") {
             keyAlias = "openai-auth-bridge"
             keyPassword = "changeit"
-            storeFile = file("release.keystore")
+            storeFile = file("../release.keystore")
             storePassword = "changeit"
         }
     }

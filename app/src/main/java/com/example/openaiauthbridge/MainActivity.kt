@@ -1,25 +1,26 @@
 package com.example.openaiauthbridge
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.os.Bundle
 import android.webkit.CookieManager
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var statusText: TextView
     private lateinit var webView: WebView
-
-    private val API_URL = "https://api.openai.com/v1"
+    private var currentToken: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,22 +79,19 @@ class MainActivity : AppCompatActivity() {
 
                 if (sessionToken == null) {
                     withContext(Dispatchers.Main) {
-                        statusText.text = "Session token not found in cookies.\n\nCookies: ${cookies.take(100)}..."
+                        statusText.text = "Session token not found.\n\nTry logging out and back in."
                     }
                     return@launch
                 }
 
+                currentToken = sessionToken
+
                 withContext(Dispatchers.Main) {
-                    statusText.text = """
-                        Session extracted!
+                    statusText.text = "Session extracted!\n\nTap here to copy to clipboard"
 
-                        Token: ${sessionToken.take(50)}...
-
-                        On VPS, run:
-                        export OPENAI_SESSION="$sessionToken"
-
-                        Then: opencode login --session
-                    """.trimIndent()
+                    statusText.setOnClickListener {
+                        copyToClipboard(sessionToken)
+                    }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
@@ -101,6 +99,15 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun copyToClipboard(text: String) {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = ClipData.newPlainText("OpenAI Session", text)
+        clipboard.setPrimaryClip(clip)
+        Toast.makeText(this, "Copied to clipboard!", Toast.LENGTH_SHORT).show()
+
+        statusText.text = "Copied!\n\nOn VPS run:\nexport OPENAI_SESSION=\"[token]\"\n\nThen: opencode login --session"
     }
 
     private fun extractSessionToken(cookies: String): String? {

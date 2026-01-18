@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">OpenAI Auth Bridge</string>
+    <string name="start_server">Start Server</string>
+    <string name="stop_server">Stop Server</string>
+    <string name="server_running">Server Running</string>
+    <string name="server_stopped">Server Stopped</string>
+    <string name="vps_url_hint">Enter VPS URL (e.g., https://your-vps.com)</string>
+    <string name="save">Save</string>
+    <string name="status_idle">Tap Start to run the auth bridge</string>
+</resources>

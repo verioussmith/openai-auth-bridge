@@ -15,9 +15,19 @@ android {
         versionName = "1.0"
     }
 
+    signingConfigs {
+        create("release") {
+            keyAlias = "openai-auth-bridge"
+            keyPassword = "changeit"
+            storeFile = file("/root/OpenAIAuthBridge/release.keystore")
+            storePassword = "changeit"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

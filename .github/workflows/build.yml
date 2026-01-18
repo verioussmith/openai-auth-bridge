@@ -38,7 +38,12 @@ jobs:
         cmdline-tools/latest/bin/sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
     - name: Build Release APK
-      run: ./gradlew assembleRelease
+      run: |
+        ./gradlew assembleRelease
+        ls -la app/build/outputs/apk/release/
+
+    - name: Copy APK to root
+      run: cp app/build/outputs/apk/release/*.apk ./app-release.apk && ls -la app-release.apk
 
     - name: Upload APK
       uses: actions/upload-artifact@v4

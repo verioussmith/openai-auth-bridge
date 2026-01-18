@@ -49,6 +49,13 @@ class MainActivity : AppCompatActivity() {
 
         setupWebView()
 
+        statusText.text = "Tap to configure"
+        statusText.setOnClickListener {
+            vpsUrl = ""
+            webView.visibility = android.view.View.VISIBLE
+            startOAuth()
+        }
+
         handleIntent(intent)
     }
 
@@ -90,16 +97,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startOAuth() {
-        if (vpsUrl.isEmpty()) {
-            statusText.text = "Tap to start"
-            statusText.setOnClickListener {
-                vpsUrl = ""
-                webView.visibility = android.view.View.VISIBLE
-                startOAuth()
-            }
-            return
-        }
-
         statusText.text = "Opening ChatGPT..."
         webView.visibility = android.view.View.VISIBLE
 

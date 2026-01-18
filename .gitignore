@@ -1,0 +1,21 @@
+# Build outputs
+app/build/
+app/release.keystore
+
+# Keystore
+*.keystore
+
+# Gradle
+.gradle/
+build/
+
+# IDE
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

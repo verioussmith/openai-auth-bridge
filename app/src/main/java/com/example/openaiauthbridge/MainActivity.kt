@@ -1,5 +1,6 @@
 package com.example.openaiauthbridge
 
+import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
@@ -13,8 +14,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
-import java.io.DataOutputStream
-import java.io.InputStreamReader
 import java.io.OutputStream
 import java.net.HttpURLConnection
 import java.net.NetworkInterface
@@ -52,7 +51,7 @@ class MainActivity : AppCompatActivity() {
 
         vpsUrlInput = findViewById(R.id.vpsUrlInput)
         statusText = findViewById(R.id.statusText)
-        startButton = findViewById(R.id.startButton)
+        startButton = findViewById(R.id.configureButton)
         phoneIpText = findViewById(R.id.phoneIpText)
 
         vpsUrlInput.setText(prefs.getString("vps_url", ""))

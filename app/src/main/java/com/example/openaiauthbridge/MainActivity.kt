@@ -288,6 +288,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private var currentTokenToCopy: String? = null
+
     private fun showTokens(accessToken: String, refreshToken: String, expiresIn: Int) {
         val expiresAt = System.currentTimeMillis() + (expiresIn * 1000)
         val expiresDisplay = java.text.SimpleDateFormat("MMM dd, HH:mm", java.util.Locale.getDefault()).format(java.util.Date(expiresAt))
@@ -295,19 +297,45 @@ class MainActivity : AppCompatActivity() {
         statusText.text = """
             ✓ Authentication Complete!
 
-            Access Token:
-            $accessToken
+            ── TAP TO COPY ──
 
-            Refresh Token:
-            $refreshToken
+            1st tap: Access Token
+            2nd tap: Refresh Token
+
+            Access: ${accessToken.take(30)}...
+            Refresh: ${refreshToken.take(30)}...
 
             Expires: $expiresDisplay
-
-            Tap here to copy access token
         """.trimIndent()
 
+        currentTokenToCopy = accessToken
+        var tapCount = 0
+
         statusText.setOnClickListener {
-            copyToClipboard(accessToken)
+            tapCount++
+            if (tapCount % 2 == 1) {
+                currentTokenToCopy = accessToken
+                copyToClipboard(accessToken)
+                statusText.text = """
+                    Copied ACCESS TOKEN
+
+                    Tap again for Refresh Token
+
+                    Access: ${accessToken.take(30)}...
+                    Refresh: ${refreshToken.take(30)}...
+                """.trimIndent()
+            } else {
+                currentTokenToCopy = refreshToken
+                copyToClipboard(refreshToken)
+                statusText.text = """
+                    Copied REFRESH TOKEN
+
+                    Tap again for Access Token
+
+                    Access: ${accessToken.take(30)}...
+                    Refresh: ${refreshToken.take(30)}...
+                """.trimIndent()
+            }
         }
 
         stopLocalServer()

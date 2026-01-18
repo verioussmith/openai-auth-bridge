@@ -1,0 +1,75 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.example.openaiauthbridge"
+4    android:versionCode="1"
+5    android:versionName="1.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="24"
+8-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml
+9        android:targetSdkVersion="30" />
+9-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:5:5-67
+11-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:5:22-64
+12
+13    <application
+13-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:7:5-33:19
+14        android:allowBackup="true"
+14-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:8:9-35
+15        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+15-->[androidx.core:core:1.6.0] /root/.gradle/caches/transforms-3/7912a6a0e0de781435d494ca46a0a752/transformed/core-1.6.0/AndroidManifest.xml:24:18-86
+16        android:extractNativeLibs="false"
+17        android:icon="@mipmap/ic_launcher"
+17-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:9:9-43
+18        android:label="@string/app_name"
+18-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:10:9-41
+19        android:roundIcon="@mipmap/ic_launcher"
+19-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:11:9-48
+20        android:supportsRtl="true"
+20-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:12:9-35
+21        android:theme="@style/Theme.OpenAIAuthBridge"
+21-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:13:9-54
+22        android:usesCleartextTraffic="true" >
+22-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:14:9-44
+23        <activity
+23-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:17:9-32:20
+24            android:name="com.example.openaiauthbridge.MainActivity"
+24-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:18:13-41
+25            android:exported="true"
+25-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:19:13-36
+26            android:theme="@style/Theme.OpenAIAuthBridge" >
+26-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:20:13-58
+27            <intent-filter>
+27-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:21:13-24:29
+28                <action android:name="android.intent.action.MAIN" />
+28-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:22:17-69
+28-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:22:25-66
+29
+30                <category android:name="android.intent.category.LAUNCHER" />
+30-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:23:17-77
+30-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:23:27-74
+31            </intent-filter>
+32            <intent-filter android:autoVerify="true" >
+32-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:25:13-31:29
+32-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:25:28-53
+33                <action android:name="android.intent.action.VIEW" />
+33-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:26:17-69
+33-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:26:25-66
+34
+35                <category android:name="android.intent.category.DEFAULT" />
+35-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:27:17-76
+35-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:27:27-73
+36                <category android:name="android.intent.category.BROWSABLE" />
+36-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:28:17-78
+36-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:28:27-75
+37
+38                <data android:scheme="openai-auth-bridge" />
+38-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:29:17-30:59
+38-->/root/OpenAIAuthBridge/app/src/main/AndroidManifest.xml:30:21-56
+39            </intent-filter>
+40        </activity>
+41    </application>
+42
+43</manifest>

@@ -5,7 +5,6 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
 import android.util.Base64
-import android.webkit.CookieManager
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -65,13 +64,36 @@ class MainActivity : AppCompatActivity() {
         webSettings.javaScriptEnabled = true
         webSettings.domStorageEnabled = true
         webSettings.allowFileAccess = true
-        webSettings.savePassword = true
-        webSettings.saveFormData = true
 
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
+                android.util.Log.d("OAuth", "Loading URL: $url")
+
                 if (url.startsWith("http://localhost:1455") && url.contains("code=")) {
-                    handleCallback(url)
+                    try {
+                        val parsedUrl = URL(url)
+                        val code = parsedUrl.query?.let { query ->
+                            Regex("code=([^&]+)").find(query)?.groupValues?.get(1)
+                        }
+                        val state = parsedUrl.query?.let { query ->
+                            Regex("state=([^&]+)").find(query)?.groupValues?.get(1)
+                        }
+
+                        if (code != null) {
+                            authCode = code
+                            authState = state
+                            android.util.Log.d("OAuth", "Code captured: ${code.take(20)}...")
+                            runOnUiThread {
+                                statusText.text = "Code received!\n\nExchanging for tokens..."
+                            }
+                            exchangeCodeForTokens()
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("OAuth", "Error parsing callback", e)
+                        runOnUiThread {
+                            statusText.text = "Error: ${e.message}"
+                        }
+                    }
                     return true
                 }
                 return false
@@ -79,37 +101,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun getLocalIpAddress(): String {
-        try {
-            val interfaces = NetworkInterface.getNetworkInterfaces()
-            while (interfaces.hasMoreElements()) {
-                val networkInterface = interfaces.nextElement()
-                val addresses = networkInterface.inetAddresses
-                while (addresses.hasMoreElements()) {
-                    val address = addresses.nextElement()
-                    if (!address.isLoopbackAddress && address.hostAddress?.contains('.') == true) {
-                        return address.hostAddress!!
-                    }
-                }
-            }
-        } catch (e: Exception) {}
-        return "localhost"
-    }
-
     private fun startOAuth() {
-        statusText.text = "Starting OAuth server..."
-        webView.visibility = android.view.View.VISIBLE
+        try {
+            statusText.text = "Starting OAuth server..."
+            webView.visibility = android.view.View.VISIBLE
 
-        startLocalServer()
+            val (verifier, challenge) = generatePKCE()
+            codeVerifier = verifier
+            authState = generateState()
 
-        val (verifier, challenge) = generatePKCE()
-        codeVerifier = verifier
-        authState = generateState()
+            android.util.Log.d("OAuth", "Starting server on port 1455")
+            startLocalServer()
 
-        val oauthUrl = buildOAuthUrl(challenge, authState!!)
+            val oauthUrl = buildOAuthUrl(challenge, authState!!)
+            android.util.Log.d("OAuth", "Opening OAuth URL: ${oauthUrl.take(100)}...")
 
-        statusText.text = "Opening ChatGPT login..."
-        webView.loadUrl(oauthUrl)
+            statusText.text = "Opening ChatGPT login..."
+            webView.loadUrl(oauthUrl)
+        } catch (e: Exception) {
+            android.util.Log.e("OAuth", "Error starting OAuth", e)
+            statusText.text = "Error: ${e.message}"
+        }
     }
 
     private fun startLocalServer() {
@@ -118,89 +130,90 @@ class MainActivity : AppCompatActivity() {
         serverThread = Thread {
             try {
                 serverSocket = ServerSocket(1455, 0, InetAddress.getByName("localhost"))
+                android.util.Log.d("OAuth", "Server started on port 1455")
+
+                val responseHtml = """
+                    HTTP/1.1 200 OK
+                    Content-Type: text/html; charset=utf-8
+                    Connection: close
+
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="UTF-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1">
+                        <title>Authorization Complete</title>
+                    </head>
+                    <body style="font-family: system-ui, sans-serif; text-align: center; padding: 40px; background: #f5f5f5;">
+                        <div style="max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px;">
+                            <h1 style="color: #10a37f;">Authorization Complete</h1>
+                            <p>You can close this page.</p>
+                        </div>
+                    </body>
+                    </html>
+                """.trimIndent()
 
                 while (isRunning.get()) {
                     try {
-                        val client = serverSocket?.accept()
-                        client?.use { c ->
-                            val reader = BufferedReader(InputStreamReader(c.getInputStream()))
-                            val request = reader.readText()
+                        val client = serverSocket?.accept() ?: break
+                        val reader = BufferedReader(InputStreamReader(client.getInputStream()))
+                        val request = reader.readText()
 
-                            if (request.contains("code=")) {
+                        android.util.Log.d("OAuth", "Server received request: ${request.take(100)}...")
+
+                        if (request.contains("code=") && authCode == null) {
+                            try {
                                 val codeMatch = Regex("code=([^&\\s]+)").find(request)
                                 val stateMatch = Regex("state=([^&\\s]+)").find(request)
 
                                 authCode = codeMatch?.groupValues?.get(1)
                                 authState = stateMatch?.groupValues?.get(1)
 
+                                android.util.Log.d("OAuth", "Server captured code: ${authCode?.take(20)}...")
+
                                 runOnUiThread {
-                                    if (authCode != null) {
-                                        statusText.text = "Authorization code received!\n\nExchanging for tokens..."
-                                    }
+                                    statusText.text = "Code received!\n\nExchanging for tokens..."
                                 }
 
                                 exchangeCodeForTokens()
+                            } catch (e: Exception) {
+                                android.util.Log.e("OAuth", "Error parsing code", e)
                             }
-
-                            val response = """
-                                HTTP/1.1 200 OK
-                                Content-Type: text/html
-                                Connection: close
-
-                                <!DOCTYPE html>
-                                <html>
-                                <head>
-                                    <meta charset="UTF-8">
-                                    <meta name="viewport" content="width=device-width, initial-scale=1">
-                                    <title>Authorization Complete</title>
-                                </head>
-                                <body style="font-family: system-ui, sans-serif; text-align: center; padding: 40px; background: #f5f5f5;">
-                                    <div style="max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px;">
-                                        <h1 style="color: #10a37f;">Authorization Complete</h1>
-                                        <p>You can close this page.</p>
-                                    </div>
-                                </body>
-                                </html>
-                            """.trimIndent()
-
-                            val output: OutputStream = c.getOutputStream()
-                            output.write(response.toByteArray())
-                            output.flush()
                         }
+
+                        val output: OutputStream = client.getOutputStream()
+                        output.write(responseHtml.toByteArray())
+                        output.flush()
+                        client.close()
                     } catch (e: Exception) {
-                        if (isRunning.get()) {}
+                        if (isRunning.get()) {
+                            android.util.Log.e("OAuth", "Server error", e)
+                        }
                     }
                 }
             } catch (e: Exception) {
+                android.util.Log.e("OAuth", "Failed to start server", e)
                 runOnUiThread {
-                    statusText.text = "Error: ${e.message}\n\nMake sure no other app is using port 1455"
+                    statusText.text = "Error starting server: ${e.message}\n\nMake sure port 1455 is free"
                 }
             }
         }
         serverThread?.start()
     }
 
-    private fun handleCallback(url: String) {
-        try {
-            val parsedUrl = URL(url)
-            val code = parsedUrl.query?.let { query ->
-                Regex("code=([^&]+)").find(query)?.groupValues?.get(1)
-            }
-
-            if (code != null) {
-                authCode = code
-                statusText.text = "Authorization code received!\n\nExchanging for tokens..."
-                exchangeCodeForTokens()
-            }
-        } catch (e: Exception) {
-            statusText.text = "Error: ${e.message}"
-        }
-    }
-
     private fun exchangeCodeForTokens() {
+        val code = authCode ?: return
+        val verifier = codeVerifier ?: return
+
+        android.util.Log.d("OAuth", "Exchanging code for tokens...")
+        android.util.Log.d("OAuth", "Code: ${code.take(20)}...")
+        android.util.Log.d("OAuth", "Verifier: ${verifier.take(20)}...")
+
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val body = "grant_type=authorization_code&client_id=$CLIENT_ID&code=$authCode&code_verifier=$codeVerifier&redirect_uri=${java.net.URLEncoder.encode(REDIRECT_URI, "UTF-8")}"
+                val body = "grant_type=authorization_code&client_id=$CLIENT_ID&code=$code&code_verifier=$verifier&redirect_uri=${java.net.URLEncoder.encode(REDIRECT_URI, "UTF-8")}"
+
+                android.util.Log.d("OAuth", "POST to $TOKEN_URL")
 
                 val url = URL(TOKEN_URL)
                 val conn = url.openConnection() as HttpURLConnection
@@ -213,20 +226,41 @@ class MainActivity : AppCompatActivity() {
                 conn.outputStream.write(body.toByteArray())
                 conn.outputStream.flush()
 
-                val response = conn.inputStream.bufferedReader().readText()
+                val responseCode = conn.responseCode
+                android.util.Log.d("OAuth", "Response code: $responseCode")
+
+                val response = if (responseCode >= 400) {
+                    conn.errorStream?.bufferedReader()?.readText() ?: ""
+                } else {
+                    conn.inputStream.bufferedReader().readText()
+                }
+
+                android.util.Log.d("OAuth", "Response: $response")
 
                 withContext(Dispatchers.Main) {
-                    parseTokenResponse(response)
+                    parseTokenResponse(response, responseCode)
                 }
             } catch (e: Exception) {
+                android.util.Log.e("OAuth", "Token exchange failed", e)
                 withContext(Dispatchers.Main) {
-                    statusText.text = "Token exchange failed: ${e.message}\n\nCode: $authCode\n\nCopy code to OpenCode manually."
+                    statusText.text = "Network error: ${e.message}\n\nTap to retry"
+                    statusText.setOnClickListener {
+                        startOAuth()
+                    }
                 }
             }
         }
     }
 
-    private fun parseTokenResponse(response: String) {
+    private fun parseTokenResponse(response: String, statusCode: Int = 200) {
+        android.util.Log.d("OAuth", "Parsing token response, status: $statusCode")
+
+        if (statusCode >= 400) {
+            android.util.Log.e("OAuth", "Error response from OpenAI: $response")
+            showManualCode("OpenAI Error: ${response.take(200)}")
+            return
+        }
+
         try {
             if (response.contains("access_token") && response.contains("refresh_token")) {
                 val accessMatch = Regex("\"access_token\":\"([^\"]+)\"").find(response)
@@ -238,20 +272,25 @@ class MainActivity : AppCompatActivity() {
                 val expiresIn = expiresMatch?.groupValues?.get(1)?.toIntOrNull() ?: 3600
 
                 if (accessToken != null && refreshToken != null) {
+                    android.util.Log.d("OAuth", "Successfully parsed tokens")
                     showTokens(accessToken, refreshToken, expiresIn)
                 } else {
-                    showManualCode()
+                    android.util.Log.e("OAuth", "Missing tokens in response")
+                    showManualCode("Could not parse tokens from response")
                 }
             } else {
-                showManualCode()
+                android.util.Log.e("OAuth", "No tokens in response: $response")
+                showManualCode("No tokens received")
             }
         } catch (e: Exception) {
-            showManualCode()
+            android.util.Log.e("OAuth", "Parse error", e)
+            showManualCode("Parse error: ${e.message}")
         }
     }
 
     private fun showTokens(accessToken: String, refreshToken: String, expiresIn: Int) {
         val expiresAt = System.currentTimeMillis() + (expiresIn * 1000)
+        val expiresDisplay = java.text.SimpleDateFormat("MMM dd, HH:mm", java.util.Locale.getDefault()).format(java.util.Date(expiresAt))
 
         statusText.text = """
             ✓ Authentication Complete!
@@ -262,7 +301,7 @@ class MainActivity : AppCompatActivity() {
             Refresh Token:
             $refreshToken
 
-            Expires: ${java.text.SimpleDateFormat("MMM dd, HH:mm", java.util.Locale.getDefault()).format(java.util.Date(expiresAt))}
+            Expires: $expiresDisplay
 
             Tap here to copy access token
         """.trimIndent()
@@ -274,29 +313,37 @@ class MainActivity : AppCompatActivity() {
         stopLocalServer()
     }
 
-    private fun showManualCode() {
-        statusText.text = """
-            Authorization Code: $authCode
+    private fun showManualCode(error: String? = null) {
+        val codeDisplay = authCode ?: "unknown"
+        val msg = if (error != null) "$error\n\n" else ""
 
-            Tap here to copy, then paste into OpenCode:
+        statusText.text = """
+            $msg
+            Authorization Code: $codeDisplay
+
+            Tap here to copy code, then on VPS run:
+            export OPENAI_SESSION="$codeDisplay"
             opencode auth login
 
-            Or paste this URL:
-            http://localhost:1455/auth/callback?code=$authCode${authState?.let { "&state=$it" } ?: ""}
+            Or restart this app to try again.
         """.trimIndent()
 
         statusText.setOnClickListener {
-            copyToClipboard(authCode ?: "")
+            copyToClipboard(codeDisplay)
         }
 
         stopLocalServer()
     }
 
     private fun copyToClipboard(text: String) {
-        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val clip = ClipData.newPlainText("OpenAI Auth", text)
-        clipboard.setPrimaryClip(clip)
-        Toast.makeText(this, "Copied!", Toast.LENGTH_SHORT).show()
+        try {
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clip = ClipData.newPlainText("OpenAI", text)
+            clipboard.setPrimaryClip(clip)
+            Toast.makeText(this, "Copied!", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Copy failed: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun stopLocalServer() {

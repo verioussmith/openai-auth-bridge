@@ -13,6 +13,14 @@
         android:textSize="20sp"
         android:textStyle="bold" />
 
+    <Button
+        android:id="@+id/loadButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:onClick="loadChatGPT"
+        android:text="Open ChatGPT" />
+
     <TextView
         android:id="@+id/statusText"
         android:layout_width="wrap_content"
@@ -22,7 +30,7 @@
         android:focusable="true"
         android:gravity="center"
         android:padding="16dp"
-        android:text="Tap to load ChatGPT"
+        android:text="Tap to open ChatGPT"
         android:textColor="#2196F3"
         android:textSize="16sp" />
 
@@ -32,14 +40,14 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
         android:onClick="extractSession"
-        android:text="Extract Session Cookies" />
+        android:text="Extract Session" />
 
     <WebView
         android:id="@+id/webView"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
         android:layout_marginTop="16dp"
+        android:layout_weight="1"
         android:visibility="gone" />
 
 </LinearLayout>

@@ -3,9 +3,11 @@ package com.example.openaiauthbridge
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.os.Build
 import android.os.Bundle
 import android.webkit.CookieManager
 import android.webkit.WebSettings
+import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.TextView
@@ -34,7 +36,7 @@ class MainActivity : AppCompatActivity() {
 
         setupWebView()
 
-        statusText.text = "Tap to open ChatGPT\n\nLogin, then tap again to test session"
+        statusText.text = "Tap to load ChatGPT\n\n(Login if needed, then tap again)"
         statusText.setOnClickListener {
             testSession(it)
         }
@@ -44,16 +46,21 @@ class MainActivity : AppCompatActivity() {
         val webSettings: WebSettings = webView.settings
         webSettings.javaScriptEnabled = true
         webSettings.domStorageEnabled = true
-        webSettings.allowFileAccess = true
+        webSettings.databaseEnabled = true
+        webSettings.setSupportMultipleWindows(false)
+        webSettings.javaScriptCanOpenWindowsAutomatically = false
+
+        // CRITICAL: Enable third-party cookies (evidence-based)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
+        }
+        CookieManager.getInstance().setAcceptCookie(true)
 
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
                 super.onPageFinished(view, url)
-                if (url.contains("chat.openai.com")) {
-                    runOnUiThread {
-                        statusText.text = "ChatGPT loaded!\n\nTap to test session"
-                    }
-                }
+                // Clear cookies cache to ensure fresh data
+                WebStorage.getInstance().deleteAllData()
             }
         }
     }
@@ -65,26 +72,63 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun testSession(view: android.view.View) {
-        statusText.text = "Testing session..."
+        statusText.text = "Checking session..."
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                // Get cookies from WebView
-                val cookies = CookieManager.getInstance().getCookie("https://chat.openai.com")
-
-                if (cookies.isNullOrEmpty()) {
-                    withContext(Dispatchers.Main) {
-                        statusText.text = "No cookies found.\n\nPlease login to ChatGPT first."
-                    }
-                    return@launch
+                // First, ensure we're logged in by loading the page
+                withContext(Dispatchers.Main) {
+                    webView.loadUrl("https://chat.openai.com")
                 }
 
-                // Test with API call
+                // Wait for page to load
+                kotlinx.coroutines.delay(3000)
+
+                // Now get cookies - this should work per Android docs
+                val cookieManager = CookieManager.getInstance()
+                val cookies = cookieManager.getCookie("https://chat.openai.com")
+                val allCookies = cookieManager.getCookie("https://chatgpt.com")
+
+                android.util.Log.d("COOKIES", "chat.openai.com: $cookies")
+                android.util.Log.d("COOKIES", "chatgpt.com: $allCookies")
+
+                withContext(Dispatchers.Main) {
+                    if (!cookies.isNullOrEmpty() || !allCookies.isNullOrEmpty()) {
+                        // We have cookies, test them
+                        testCookiesWithAPI(cookies ?: allCookies)
+                    } else {
+                        statusText.text = """
+                            No cookies found.
+
+                            ── Troubleshooting ──
+
+                            1. Are you logged into chat.openai.com?
+                            2. Check if third-party cookies are blocked
+                            3. Try logging in again in the WebView
+
+                            Tap to retry
+                        """.trimIndent()
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    statusText.text = "Error: ${e.message}"
+                }
+            }
+        }
+    }
+
+    private fun testCookiesWithAPI(cookies: String) {
+        statusText.text = "Testing cookies with ChatGPT API..."
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
                 val url = URL(API_URL)
                 val conn = url.openConnection() as HttpURLConnection
                 conn.requestMethod = "GET"
                 conn.setRequestProperty("Cookie", cookies)
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0")
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
+                conn.setRequestProperty("Accept", "application/json")
                 conn.connectTimeout = 30000
                 conn.readTimeout = 30000
 
@@ -95,33 +139,53 @@ class MainActivity : AppCompatActivity() {
                     conn.inputStream.bufferedReader().readText()
                 }
 
+                android.util.Log.d("API_TEST", "Response code: $responseCode")
+                android.util.Log.d("API_TEST", "Response: ${response.take(500)}")
+
                 withContext(Dispatchers.Main) {
-                    if (responseCode == 200 && response.contains("data")) {
-                        // Success! We have a working session
-                        showSuccess(cookies)
-                    } else if (responseCode == 401 || responseCode == 403) {
-                        statusText.text = """
-                            Session not authenticated.
-
-                            Response: ${response.take(200)}
-
-                            Please login to ChatGPT first, then try again.
-                        """.trimIndent()
-                    } else {
-                        statusText.text = """
-                            Unexpected response:
-
-                            Code: $responseCode
-                            Response: ${response.take(300)}
-
-                            Tap to retry
-                        """.trimIndent()
-                    }
+                    parseAPIResponse(responseCode, response, cookies)
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    statusText.text = "Error: ${e.message}\n\nTap to retry"
+                    statusText.text = "API test failed: ${e.message}\n\nTap to retry"
                 }
+            }
+        }
+    }
+
+    private fun parseAPIResponse(code: Int, response: String, cookies: String) {
+        when {
+            code == 200 && response.contains("data") -> {
+                // Success! We have a working session
+                showSuccess(cookies)
+            }
+            code == 401 || code == 403 -> {
+                statusText.text = """
+                    Cookies found but not authenticated.
+
+                    Response: ${response.take(200)}
+
+                    Please login to ChatGPT in the WebView first, then try again.
+                """.trimIndent()
+            }
+            code == 429 -> {
+                statusText.text = """
+                    Rate limited.
+
+                    Response: ${response.take(200)}
+
+                    Wait a moment and try again.
+                """.trimIndent()
+            }
+            else -> {
+                statusText.text = """
+                    Unexpected response:
+
+                    Code: $code
+                    Response: ${response.take(300)}
+
+                    Tap to retry
+                """.trimIndent()
             }
         }
     }
@@ -145,9 +209,11 @@ class MainActivity : AppCompatActivity() {
         statusText.text = """
             ✓ Working Session!
 
-            ── TAP TO COPY COOKIES ──
+            API responded successfully.
 
-            1st tap: Full cookie string
+            ── TAP TO COPY ──
+
+            1st tap: All cookies
             2nd tap: session_token
             3rd tap: session_user
 
@@ -171,7 +237,7 @@ class MainActivity : AppCompatActivity() {
     private fun copyToClipboard(text: String) {
         try {
             val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val clip = ClipData.newPlainText("OpenAI Cookies", text)
+            val clip = ClipData.newPlainText("OpenAI", text)
             clipboard.setPrimaryClip(clip)
             Toast.makeText(this, "Copied!", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {

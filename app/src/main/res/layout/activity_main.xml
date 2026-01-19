@@ -9,7 +9,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="OpenAI Session Extractor"
+        android:text="ChatGPT Session Tester"
         android:textSize="20sp"
         android:textStyle="bold" />
 
@@ -30,17 +30,9 @@
         android:focusable="true"
         android:gravity="center"
         android:padding="16dp"
-        android:text="Tap to open ChatGPT"
+        android:text="Tap to load ChatGPT"
         android:textColor="#2196F3"
         android:textSize="16sp" />
-
-    <Button
-        android:id="@+id/extractButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:onClick="extractSession"
-        android:text="Extract Session" />
 
     <WebView
         android:id="@+id/webView"

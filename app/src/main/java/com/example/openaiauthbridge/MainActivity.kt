@@ -1,21 +1,22 @@
 package com.example.openaiauthbridge
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.os.Bundle
-import android.webkit.CookieManager
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import java.security.MessageDigest
+import android.util.Base64
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var statusText: TextView
     private lateinit var webView: WebView
+
+    private val CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
+    private val AUTHORIZE_URL = "https://auth.openai.com/oauth/authorize"
+    private val REDIRECT_URI = "https://oauth.philoveracity.com/auth/callback"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,9 +27,9 @@ class MainActivity : AppCompatActivity() {
 
         setupWebView()
 
-        statusText.text = "Tap to load ChatGPT"
+        statusText.text = "Tap to start OAuth\n\nRedirect: oauth.philoveracity.com"
         statusText.setOnClickListener {
-            loadChatGPT()
+            startOAuth()
         }
     }
 
@@ -37,140 +38,55 @@ class MainActivity : AppCompatActivity() {
         webSettings.javaScriptEnabled = true
         webSettings.domStorageEnabled = true
         webSettings.allowFileAccess = true
-        webSettings.savePassword = true
-        webSettings.saveFormData = true
 
         webView.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView, url: String) {
-                super.onPageFinished(view, url)
-                if (url.contains("chat.openai.com")) {
-                    runOnUiThread {
-                        statusText.text = "ChatGPT loaded!\n\nTap to extract cookies"
-                    }
+            override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
+                if (url.startsWith("https://oauth.philoveracity.com")) {
+                    statusText.text = "OAuth callback received!\n\nCheck VPS for the authorization code."
                 }
+                return false
             }
         }
     }
 
-    private fun loadChatGPT() {
-        statusText.text = "Loading ChatGPT...\n\nMake sure to log in!"
+    private fun startOAuth() {
+        statusText.text = "Opening ChatGPT OAuth..."
         webView.visibility = android.view.View.VISIBLE
-        webView.loadUrl("https://chat.openai.com")
+
+        val (codeChallenge, state) = generateOAuthParams()
+        val oauthUrl = buildOAuthUrl(codeChallenge, state)
+
+        webView.loadUrl(oauthUrl)
     }
 
-    fun extractSession(view: android.view.View) {
-        statusText.text = "Extracting cookies..."
+    private fun generateOAuthParams(): Pair<String, String> {
+        val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+        val random = java.security.SecureRandom()
+        val codeVerifier = (1..128).map { chars[random.nextInt(chars.length)] }.joinToString("")
 
-        webView.evaluateJavascript("""
-            (function() {
-                var cookies = document.cookie.split(';');
-                var result = {};
-                for (var i = 0; i < cookies.length; i++) {
-                    var cookie = cookies[i].trim();
-                    if (cookie.indexOf('session_token') === 0) {
-                        result.session_token = cookie.split('=')[1];
-                    }
-                    if (cookie.indexOf('session_user') === 0) {
-                        result.session_user = cookie.split('=')[1];
-                    }
-                    if (cookie.indexOf('__cf_bm') === 0) {
-                        result.cf_bm = cookie.split('=')[1];
-                    }
-                }
-                return JSON.stringify(result);
-            })();
-        """) { cookiesJson ->
-            runOnUiThread {
-                if (cookiesJson == "{}" || cookiesJson == "null") {
-                    statusText.text = """
-                        No cookies found.
+        val digest = MessageDigest.getInstance("SHA-256")
+        val hash = digest.digest(codeVerifier.toByteArray())
+        val codeChallenge = Base64.encodeToString(hash, Base64.NO_WRAP or Base64.URL_SAFE).replace("=", "")
 
-                        ── Troubleshooting ──
+        val stateChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+        val state = (1..32).map { stateChars[random.nextInt(stateChars.length)] }.joinToString("")
 
-                        1. Are you logged into ChatGPT?
-                        2. Try refreshing the page
-                        3. Check if you see chat history
-
-                        Tap to retry
-                    """.trimIndent()
-                } else {
-                    showCookies(cookiesJson)
-                }
-            }
-        }
+        return Pair(codeChallenge, state)
     }
 
-    private fun showCookies(cookiesJson: String) {
-        try {
-            val cleanJson = cookiesJson.replace("\"", "").replace("\\", "")
-            val pairs = cleanJson.removePrefix("{").removeSuffix("}").split(",")
-            
-            var sessionToken: String? = null
-            var sessionUser: String? = null
-            var cfBm: String? = null
-
-            for (pair in pairs) {
-                val parts = pair.split(":")
-                if (parts.size == 2) {
-                    when (parts[0].trim()) {
-                        "session_token" -> sessionToken = parts[1].trim()
-                        "session_user" -> sessionUser = parts[1].trim()
-                        "cf_bm" -> cfBm = parts[1].trim()
-                    }
-                }
-            }
-
-            statusText.text = """
-                Session Extracted!
-
-                ── TAP TO COPY ──
-
-                1st tap: session_token
-                2nd tap: session_user
-                3rd tap: __cf_bm
-
-                session_token: ${sessionToken?.take(40) ?: "Not found"}...
-                session_user: ${sessionUser?.take(40) ?: "Not found"}...
-                __cf_bm: ${cfBm?.take(40) ?: "Not found"}...
-            """.trimIndent()
-
-            var tapCount = 0
-            statusText.setOnClickListener {
-                tapCount++
-                when (tapCount % 3) {
-                    1 -> {
-                        if (sessionToken != null) {
-                            copyToClipboard(sessionToken)
-                            statusText.text = "Copied session_token!\n\nTap for session_user"
-                        }
-                    }
-                    2 -> {
-                        if (sessionUser != null) {
-                            copyToClipboard(sessionUser)
-                            statusText.text = "Copied session_user!\n\nTap for __cf_bm"
-                        }
-                    }
-                    0 -> {
-                        if (cfBm != null) {
-                            copyToClipboard(cfBm)
-                            statusText.text = "Copied __cf_bm!\n\nTap for session_token"
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            statusText.text = "Error parsing cookies: ${e.message}\n\nJSON: $cookiesJson"
-        }
-    }
-
-    private fun copyToClipboard(text: String) {
-        try {
-            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val clip = ClipData.newPlainText("OpenAI Session", text)
-            clipboard.setPrimaryClip(clip)
-            Toast.makeText(this, "Copied!", Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            Toast.makeText(this, "Copy failed: ${e.message}", Toast.LENGTH_SHORT).show()
+    private fun buildOAuthUrl(codeChallenge: String, state: String): String {
+        return buildString {
+            append(AUTHORIZE_URL)
+            append("?response_type=code")
+            append("&client_id=$CLIENT_ID")
+            append("&redirect_uri=${java.net.URLEncoder.encode(REDIRECT_URI, "UTF-8")}")
+            append("&scope=openid+profile+email+offline_access")
+            append("&code_challenge=$codeChallenge")
+            append("&code_challenge_method=S256")
+            append("&state=$state")
+            append("&id_token_add_organizations=true")
+            append("&codex_cli_simplified_flow=true")
+            append("&originator=codex_cli_rs")
         }
     }
 }
